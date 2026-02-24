@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   CheckCircle2,
   Circle,
@@ -12,9 +12,7 @@ import {
   ChevronRight,
   Award,
   Bell,
-  BellRing,
-  Coffee,
-  Brain
+  BellRing
 } from 'lucide-react';
 
 // Importaciones de Firebase
@@ -23,7 +21,6 @@ import {
   getAuth,
   signInAnonymously,
   onAuthStateChanged,
-  signInWithCustomToken,
 } from 'firebase/auth';
 import {
   getFirestore,
@@ -34,7 +31,7 @@ import {
 } from 'firebase/firestore';
 
 // Configuración para Vercel
-let firebaseConfig = {
+const firebaseConfig = {
   apiKey: 'AIzaSyBeME0xWDMqfN3BFXsRlWhqeFEwayoHErw',
   authDomain: 'trackrutina.firebaseapp.com',
   projectId: 'trackrutina',
@@ -43,16 +40,6 @@ let firebaseConfig = {
   appId: '1:273876663923:web:39191e8f8d5e3de760f406',
   measurementId: 'G-L3J4ZZWH37',
 };
-
-let isPreview = false;
-let globalAppId = 'default-app-id';
-
-// Entorno de prueba interactivo
-if (typeof __firebase_config !== 'undefined') {
-  firebaseConfig = JSON.parse(__firebase_config);
-  isPreview = true;
-  globalAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-}
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -67,18 +54,13 @@ export default function App() {
   const dateKey = currentDate.toISOString().split('T')[0];
   const dayOfWeek = currentDate.getDay();
 
-  // Autenticación con manejo absoluto de errores
+  // Autenticación limpia
   useEffect(() => {
     const initAuth = async () => {
       try {
-        if (isPreview && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
+        await signInAnonymously(auth);
       } catch (error: any) {
-        console.error('Error crítico al autenticar:', error);
-        // Atrapa CUALQUIER error y fuerza el modo local para no congelar la pantalla
+        console.error('Error al autenticar:', error);
         setUser({ uid: 'local-user', isLocal: true, errorCode: error.code || error.message });
       }
     };
@@ -86,7 +68,6 @@ export default function App() {
 
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       if (u) {
-        // Solo actualizamos si Firebase nos dio un usuario real
         setUser(u);
       }
     });
@@ -97,9 +78,7 @@ export default function App() {
   useEffect(() => {
     if (!user || user.isLocal) return;
 
-    const progressRef = isPreview
-      ? collection(db, 'artifacts', globalAppId, 'users', user.uid, 'progress')
-      : collection(db, 'users', user.uid, 'progress');
+    const progressRef = collection(db, 'users', user.uid, 'progress');
 
     const unsubscribe = onSnapshot(
       progressRef,
@@ -137,9 +116,7 @@ export default function App() {
     if (user.isLocal) return;
 
     try {
-      const docRef = isPreview
-        ? doc(db, 'artifacts', globalAppId, 'users', user.uid, 'progress', dateKey)
-        : doc(db, 'users', user.uid, 'progress', dateKey);
+      const docRef = doc(db, 'users', user.uid, 'progress', dateKey);
 
       await setDoc(
         docRef,
@@ -174,14 +151,12 @@ export default function App() {
     }
   };
 
-  // Rutina Curada basada en Horarios y Macros exactos
   const routine = useMemo(() => {
     const sections = [];
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
     const isWednesday = dayOfWeek === 3;
     const isGymDay = dayOfWeek === 1 || dayOfWeek === 2 || dayOfWeek === 4 || dayOfWeek === 5;
 
-    // 1. Skincare AM
     sections.push({
       title: 'Skincare AM & Arranque',
       icon: <Sun className="w-5 h-5 text-amber-500" />,
@@ -190,11 +165,10 @@ export default function App() {
         { id: 'sam1', text: 'Limpiador suave y secado' },
         { id: 'sam2', text: 'Ácido Salicílico (Esperar 15 min)' },
         { id: 'sam3', text: 'Protector Solar Matificante' },
-        { id: 'vlatte', text: 'V Latte Kaffee c/ agua o leche (60 cal | Mezcla de Hongos Adaptógenos para enfoque en clases)' },
+        { id: 'vlatte', text: 'V Latte Kaffee c/ agua o leche (60 cal | Mezcla de Hongos Adaptógenos)' },
       ],
     });
 
-    // 2. Alimentación y Macros
     const foodItems = [];
     if (isWeekend) {
       foodItems.push({
@@ -221,7 +195,6 @@ export default function App() {
       text: 'Cena: Sándwich 3 huevos + Espinacas (444 cal | 29.6g P | 34.6g C | 22.5g G)',
     });
     
-    // Batido nocturno varía si es día de gym
     if (isGymDay) {
       foodItems.push({
         id: 'f_shake_gym',
@@ -241,7 +214,6 @@ export default function App() {
       items: foodItems,
     });
 
-    // 3. Hidratación
     sections.push({
       title: 'Hidratación',
       icon: <Droplets className="w-5 h-5 text-blue-500" />,
@@ -254,7 +226,6 @@ export default function App() {
       ],
     });
 
-    // 4. Fitness
     const fitnessItems = [];
     if (isGymDay) {
       let splitText = '';
@@ -285,7 +256,6 @@ export default function App() {
       items: fitnessItems,
     });
 
-    // 5. Skincare PM
     const pmItems = [{ id: 'spm1', text: 'Limpiador suave y secar al 100%' }];
 
     if (isWednesday || dayOfWeek === 6) {
@@ -345,9 +315,8 @@ export default function App() {
             <p className="mb-2">Hubo un problema al conectar con tu base de datos. El error reportado es: <strong>{user.errorCode}</strong></p>
             <ul className="list-disc pl-5 space-y-1">
               <li>Si dice <strong>auth/operation-not-allowed</strong>: Ve a Firebase &gt; Authentication &gt; Sign-in method y habilita el método "Anónimo".</li>
-              <li>Si dice <strong>auth/unauthorized-domain</strong>: Ve a Firebase &gt; Authentication &gt; Settings &gt; Authorized domains y agrega <code>stackblitz.io</code> o el dominio de Vercel.</li>
+              <li>Si dice <strong>auth/unauthorized-domain</strong>: Ve a Firebase &gt; Authentication &gt; Settings &gt; Authorized domains y agrega tu dominio de Vercel.</li>
             </ul>
-            <p className="mt-2 text-yellow-900">Mientras tanto, puedes usar la app. Tus progresos se guardarán temporalmente.</p>
           </div>
         )}
 
